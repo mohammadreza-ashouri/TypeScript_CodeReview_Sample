@@ -1,0 +1,133 @@
+# Code Reviewer: Mohammadreza Ashouri
+# ashouri@uni-potsdam.de
+# 3 Feb 2021
+
+
+-------------------------------------------------------------------------------
+
+1- File /src/common/guards/roles.guard.ts at line 10:
+
+async canActivate(context: ExecutionContext): Promise<boolean> {
+   *-> const methodRoles = this.reflector.get<UserRole[]>('roles', context.getHandler()) || [];
+   const classRoles = this.reflector.get<UserRole[]>('roles', context.getClass()) || [];
+
+   if (!methodRoles && !classRoles) {
+Condition '!methodRoles' is always false. The value of variable 'methodRoles' is originated from the assignment 'methodRoles = this.reflector.get(...' at line 10.
+     return true;
+   }
+
+Bug:  Condition '!methodRoles' is always false, it makes junk (dead code)
+ The value of variable 'methodRoles' is originated from the assignment 'methodRoles = this.reflector.get<UserRole[]>
+
+2- File: src/users/user.repository.ts at lines 144 and 146:
+
+const passwordMatch = await user.validatePassword(currentPassword);
+
+   if (!user) {
+     throw new BadRequestException();
+   }
+
+Bug exploitation: Variable 'user' is null checked at line 146, but its property is accessed without null check prior at line 144.
+
+
+------------------------------------------------------
+
+3- File: /src/users/dto/reset-password.dto.ts at line 2:
+import { IsEmail, IsNotEmpty, IsOptional, IsString } from "class-validator";
+
+Bug: Imported binding 'IsOptional' is not used!
+Please note that this reduces the code runtime performance and introduce potential errors during the runtime.
+
+------------------------------------------------------
+
+4- File /src/app.controller.ts  at line 2:
+import { Controller, Get } from '@nestjs/common';
+Bug: Again Imported binding 'Get' is not used, so remove it for the same reason I explained above.
+
+------------------------------------------------------
+5- File /src/subjects/dto/update-subject.dto.ts  at line 2:
+import { IsBoolean, IsNotEmpty, IsOptional, IsString } from "class-validator";
+Bug: Again Imported binding 'IsNotEmpty' is not used, so remove it for the same reason I explained before.
+
+------------------------------------------------------
+6- File /src/subjects/subject.repository.ts at line 2:
+-> import { EntityRepository, IsNull, Repository } from "typeorm";
+Bug: Imported binding 'IsNull' is not used, so remove it for the same reason I explained above.
+------------------------------------------------------
+
+7- File /src/app.module.ts  at line 1:
+*-> import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
+Bug: Imported binding 'APP_INTERCEPTOR' is not used, so remove it for the same reason I explained above.
+------------------------------------------------------
+
+Programming Tips
+
+ATENTION:
+* `null` or `undefined` check should be consistent for all accesses of a variable, here is why:
+
+This rule applies when a variable is checked for null (or undefined) value at one point but is accessed without null check at another point.
+If the variable has indeed null value, a TypeError exception occurs when trying to access its property or call it as a function.
+Therefore, a programmer needs to check the following:Access a variable consistently after checking it is not null.
+Remove all null checks of a variable consistently if it cannot be null.
+Code Example
+function example1(x) {
+    x.p = 42;
+    if (x != null) { // INSUFFICIENT_NULL_CHECK alarm
+        doSomething(x);
+    }
+}
+
+function example2(x) {
+    if (x != null) { // INSUFFICIENT_NULL_CHECK alarm
+        doSomething(x);
+    }
+    y = x.p;
+}
+
+function example3(cb) {
+    cb();
+    if (cb != null) { // INSUFFICIENT_NULL_CHECK alarm
+        doSomething(cb);
+    }
+}
+Revised Code Example
+function example1(x) {
+    if (x != null) {
+        x.p = 42;
+        doSomething(x);
+    }
+}
+
+function example2(x) {
+    if (x != null) {
+        doSomething(x);
+    }
+    y = x != null ? x.p : '';
+}
+
+function example3(cb) {
+    // If 'cb' must not be null
+    cb();
+    doSomething(cb);
+}
+
+--------------------------------
+
+* Unused imported bindings should be removed
+This rule applies when imported bindings are declared but not used.For maintainability, it is recommended to remove unused code.
+Also, it might be a mistake that a programmer forgets to use declared imported bindings.
+
+Code Example
+import {
+    count,
+    increment // UNUSED_IMPORT alarm
+} from "my-counter";
+console.log(count);
+
+
+Revised Code Example
+// In case when the imported binding is actually not used
+import {
+    count
+} from "my-counter";
+console.log(count);
